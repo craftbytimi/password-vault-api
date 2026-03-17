@@ -117,7 +117,7 @@ func ValidatePasswordHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Here you would typically call a function to validate the JWT token
-	err = utils.ValidateJWT(tokenString)
+	_, err = utils.ValidateJWT(tokenString)
 	if err != nil {
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
