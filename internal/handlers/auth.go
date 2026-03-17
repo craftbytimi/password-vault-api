@@ -90,3 +90,37 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Step 5: If the login is successful, send a success response
 	w.Write([]byte("Login successful!"))
 }
+
+func ValidatePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	var requestData struct {
+		Password string `json:"password"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		http.Error(w, "Please send valid JSON with a password", http.StatusBadRequest)
+		return
+	}
+
+	err = utils.ValidatePassword(requestData.Password)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Write([]byte("Password is valid!"))
+
+	// validate jwt token from Authorization header
+	tokenString := r.Header.Get("Authorization")
+	if tokenString == "" {
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+	// Here you would typically call a function to validate the JWT token
+	err = utils.ValidateJWT(tokenString)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+	w.Write([]byte("Token is valid!"))
+}
