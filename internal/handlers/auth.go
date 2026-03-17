@@ -14,6 +14,7 @@ var userStore = make(map[string]models.User)
 
 // RegisterHandler is a function that lets users sign up.
 // It reads the username and password from the request, hashes the password, and saves the user.
+
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Make a struct to hold the incoming data
 	var requestData struct {
@@ -28,23 +29,26 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Please send valid JSON with username and password", http.StatusBadRequest)
 		return
 	}
-
-	// Step 3: Make a new user with the username
-	user := models.User{Username: requestData.Username}
-
-	// Step 4: Hash the password and store it in the user
-	err = user.SetPassword(requestData.Password)
-	if err != nil {
-		// If hashing fails, send an error response
-		http.Error(w, "Could not set password", http.StatusInternalServerError)
+	// Step 3: Check if the username already exists in userStore
+	if _, exists := userStore[requestData.Username]; exists {
+		http.Error(w, "Username already exists", http.StatusBadRequest)
 		return
 	}
 
-	// Step 5: Save the user in the userStore map
+	// Step 4: Hash the password using a secure hashing function (e.g., bcrypt)
+	hashedPassword, err := utils.HashPassword(requestData.Password)
+	if err != nil {
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
+	}
+	// Step 5: Create a new User struct and save it in userStore
+	user := models.User{
+		Username:       requestData.Username,
+		HashedPassword: hashedPassword,
+	}
 	userStore[requestData.Username] = user
 
 	// Step 6: Send a success response
-	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte("User registered successfully!"))
 }
 
@@ -90,6 +94,8 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Step 5: If the login is successful, send a success response
 	w.Write([]byte("Login successful!"))
 }
+
+// ...existing code...
 
 func ValidatePasswordHandler(w http.ResponseWriter, r *http.Request) {
 	var requestData struct {

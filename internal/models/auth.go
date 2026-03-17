@@ -16,8 +16,10 @@ type User struct {
 }
 
 type UserLogin struct {
+	ID       uint   `json:"id"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Salt     []byte `json:"salt"`
 }
 
 type UserRegister struct {

@@ -57,6 +57,16 @@ A secure API for storing username and password pairs for websites. All credentia
 - `DB_NAME`
 - `JWT_SECRET`
 
+## Notes
+- AES-256, or Advanced Encryption Standard with a 256-bit key, is one of the most secure encryption algorithms available today. It is a symmetric key encryption standard adopted by the U.S. government and widely used across various industries for securing sensitive data. The strength of AES-256 lies in its large key size, which makes brute-force attacks virtually impractical. With its robust security features and efficiency, AES-256 is the go-to choice for protecting data in transit and at rest.
+
+## Use Cases
+- Data-at-Rest Encryption ( organizations can use AES-256 to encrypt sensitive data to protect it from unauthorized access, even if the storage medium is compromised)
+- Secure Communication ( it is widely used in vpns and tls/ssl)
+- Password Management 
+- File Encryption
+
+
 ## Project Roadmap
 See the [TODO.md](TODO.md) file for a step-by-step breakdown of tasks.
 
