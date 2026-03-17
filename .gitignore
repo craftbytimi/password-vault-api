@@ -1,0 +1,50 @@
+# Go build and dependency files
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output of go coverage tool
+*.out
+
+# Dependency directories (vendor, modules)
+/vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment and config
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+
+# SSH keys
+*.pem
+*.key
+*.pub
+
+# Misc
+node_modules/
+
+# Ignore local settings
+local.settings.json
+
+# Ignore temporary files
+/tmp/
