@@ -1,10 +1,15 @@
 package main
 
 import (
+	"github.com/craftbytimi/password-vault-api/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// load the db connection
+	config.ConnectDB()
+
+	// gin router instance
 	r := gin.Default()
 
 	r.GET("/", func(c *gin.Context) {
@@ -13,3 +18,4 @@ func main() {
 
 	r.Run(":8080")
 }
+
