@@ -3,11 +3,18 @@ package main
 import (
 	"github.com/craftbytimi/password-vault-api/internal/config"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
+
+var dbInstance *gorm.DB
 
 func main() {
 	// load the db connection
-	config.ConnectDB()
+	db, err := config.ConnectDB()
+	if err != nil {
+		panic("Failed to connect to database: " + err.Error())
+	}
+	dbInstance = db
 
 	// gin router instance
 	r := gin.Default()
@@ -18,4 +25,3 @@ func main() {
 
 	r.Run(":8080")
 }
-
