@@ -1,132 +1,176 @@
 package handlers
 
 import (
-	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/craftbytimi/password-vault-api/internal/config"
 	"github.com/craftbytimi/password-vault-api/internal/models"
 	"github.com/craftbytimi/password-vault-api/internal/utils"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-// userStore is a simple map that stores users in memory.
-// This is just for learning. In real apps, use a database.
-var userStore = make(map[string]models.User)
+const currentUserKey = "currentUser"
 
-// RegisterHandler is a function that lets users sign up.
-// It reads the username and password from the request, hashes the password, and saves the user.
-
-func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Make a struct to hold the incoming data
-	var requestData struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-
-	// Step 2: Read the JSON from the request body into requestData
-	err := json.NewDecoder(r.Body).Decode(&requestData)
-	if err != nil {
-		// If the data is not valid JSON, send an error response
-		http.Error(w, "Please send valid JSON with username and password", http.StatusBadRequest)
-		return
-	}
-	// Step 3: Check if the username already exists in userStore
-	if _, exists := userStore[requestData.Username]; exists {
-		http.Error(w, "Username already exists", http.StatusBadRequest)
-		return
-	}
-
-	// Step 4: Hash the password using a secure hashing function (e.g., bcrypt)
-	hashedPassword, err := utils.HashPassword(requestData.Password)
-	if err != nil {
-		http.Error(w, "Error hashing password", http.StatusInternalServerError)
-		return
-	}
-	// Step 5: Create a new User struct and save it in userStore
-	user := models.User{
-		Username:       requestData.Username,
-		HashedPassword: hashedPassword,
-	}
-	userStore[requestData.Username] = user
-
-	// Step 6: Send a success response
-	w.Write([]byte("User registered successfully!"))
+type authRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Make a struct to hold the incoming data
-	var requestData struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+func RegisterHandler(c *gin.Context) {
+	var req authRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+		return
 	}
 
-	// Step 2: Read the JSON from the request body into requestData
-	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err := utils.ValidatePassword(req.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	db := config.GetDB()
+	if db == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database is not configured"})
+		return
+	}
+
+	var existing models.User
+	err := db.Where("username = ?", req.Username).First(&existing).Error
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+		return
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check existing user"})
+		return
+	}
+
+	hashedPassword, err := utils.HashPassword(req.Password)
 	if err != nil {
-		// If the data is not valid JSON, send an error response
-		http.Error(w, "Please send valid JSON with username and password", http.StatusBadRequest)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 		return
 	}
 
-	// Step 3: Look up the user in the userStore map
-	user, exists := userStore[requestData.Username]
-	if !exists {
-		// If the user does not exist, send an error response
-		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+	user := models.User{
+		Username:       req.Username,
+		HashedPassword: hashedPassword,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 		return
 	}
 
-	// Step 4: Check if the provided password matches the stored hashed password
-	ok := utils.ComparePasswordHash(requestData.Password, user.HashedPassword)
-	if !ok {
-		// If the password does not match, send an error response
-		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "user registered successfully",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+		},
+	})
+}
+
+func LoginHandler(c *gin.Context) {
+	var req authRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid input"})
+		return
+	}
+
+	db := config.GetDB()
+	if db == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database is not configured"})
+		return
+	}
+
+	var user models.User
+	if err := db.Where("username = ?", req.Username).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user"})
+		return
+	}
+
+	if !utils.ComparePasswordHash(req.Password, user.HashedPassword) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 		return
 	}
 
 	token, err := utils.GenerateJWT(user.Username)
 	if err != nil {
-		http.Error(w, "Could not generate token", http.StatusInternalServerError)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not generate token"})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": token})
-	// Step 5: If the login is successful, send a success response
-	w.Write([]byte("Login successful!"))
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-// ...existing code...
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenString, ok := extractToken(c.GetHeader("Authorization"))
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
+			return
+		}
 
-func ValidatePasswordHandler(w http.ResponseWriter, r *http.Request) {
-	var requestData struct {
-		Password string `json:"password"`
+		username, err := utils.ValidateJWT(tokenString)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
+		}
+
+		db := config.GetDB()
+		if db == nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "database is not configured"})
+			return
+		}
+
+		var user models.User
+		if err := db.Where("username = ?", username).First(&user).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch user"})
+			return
+		}
+
+		c.Set(currentUserKey, user)
+		c.Next()
+	}
+}
+
+func CurrentUser(c *gin.Context) (models.User, bool) {
+	value, exists := c.Get(currentUserKey)
+	if !exists {
+		return models.User{}, false
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&requestData)
-	if err != nil {
-		http.Error(w, "Please send valid JSON with a password", http.StatusBadRequest)
-		return
+	user, ok := value.(models.User)
+	if !ok {
+		return models.User{}, false
 	}
 
-	err = utils.ValidatePassword(requestData.Password)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	return user, true
+}
+
+func extractToken(header string) (string, bool) {
+	if header == "" {
+		return "", false
 	}
 
-	w.Write([]byte("Password is valid!"))
+	parts := strings.Fields(header)
+	if len(parts) == 1 {
+		return parts[0], true
+	}
 
-	// validate jwt token from Authorization header
-	tokenString := r.Header.Get("Authorization")
-	if tokenString == "" {
-		http.Error(w, "Missing token", http.StatusUnauthorized)
-		return
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return parts[1], true
 	}
-	// Here you would typically call a function to validate the JWT token
-	_, err = utils.ValidateJWT(tokenString)
-	if err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-	w.Write([]byte("Token is valid!"))
+
+	return "", false
 }

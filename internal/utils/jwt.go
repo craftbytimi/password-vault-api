@@ -1,14 +1,19 @@
 package utils
 
 import (
+	"errors"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("your_secret_key_here")
-
 func GenerateJWT(username string) (string, error) {
+	jwtSecret, err := getJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": username,
 		"exp":      time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
@@ -22,6 +27,11 @@ func GenerateJWT(username string) (string, error) {
 }
 
 func ValidateJWT(tokenString string) (string, error) {
+	jwtSecret, err := getJWTSecret()
+	if err != nil {
+		return "", err
+	}
+
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -44,4 +54,12 @@ func ValidateJWT(tokenString string) (string, error) {
 	}
 
 	return username, nil
+}
+
+func getJWTSecret() ([]byte, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return nil, errors.New("JWT_SECRET is not set")
+	}
+	return []byte(secret), nil
 }

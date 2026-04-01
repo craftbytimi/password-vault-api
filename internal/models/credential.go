@@ -2,14 +2,15 @@ package models
 
 // Credential represents a user's stored credential (e.g., password, note, etc.)
 type Credential struct {
-	ID                uint `gorm:"primaryKey"`
-	UserID            uint // Foreign key to User
-	Name              string
-	Username          string
-	EncryptedPassword []byte // Encrypted credential
-	EncryptedDEK      []byte // Envelope-encrypted DEK
-	DEKNonce          []byte // Nonce used for DEK encryption
-	DataNonce         []byte // Nonce used for credential encryption
-	CreatedAt         int64
-	UpdatedAt         int64
+	ID                uint   `gorm:"primaryKey" json:"id"`
+	UserID            uint   `gorm:"index;not null" json:"user_id"`
+	Name              string `gorm:"not null" json:"name"`
+	Username          string `gorm:"not null" json:"username"`
+	Salt              []byte `gorm:"not null" json:"-"`
+	EncryptedPassword []byte `gorm:"not null" json:"-"`
+	EncryptedDEK      []byte `gorm:"not null" json:"-"`
+	DEKNonce          []byte `gorm:"not null" json:"-"`
+	DataNonce         []byte `gorm:"not null" json:"-"`
+	CreatedAt         int64  `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt         int64  `gorm:"autoUpdateTime" json:"updated_at"`
 }

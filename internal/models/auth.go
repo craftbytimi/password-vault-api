@@ -2,24 +2,20 @@ package models
 
 import (
 	"fmt"
-
-	"gorm.io/gorm"
+	"time"
 )
 
 type User struct {
-	gorm.Model
-	ID             uint                        `gorm:"primaryKey" json:"id"`
-	Username       string                      `gorm:"unique" json:"username"`
-	Password       string                      `json:"password"`
-	HashedPassword string                      `json:"hash"`
-	SetPassword    func(password string) error `gorm:"-" json:"-"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Username       string    `gorm:"uniqueIndex;not null" json:"username"`
+	HashedPassword string    `gorm:"not null" json:"-"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type UserLogin struct {
-	ID       uint   `json:"id"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-	Salt     []byte `json:"salt"`
 }
 
 type UserRegister struct {
@@ -32,8 +28,8 @@ func (u *User) Validate() error {
 	if u.Username == "" {
 		return fmt.Errorf("username is required")
 	}
-	if u.Password == "" {
-		return fmt.Errorf("password is required")
+	if u.HashedPassword == "" {
+		return fmt.Errorf("hashed password is required")
 	}
 	return nil
 }
